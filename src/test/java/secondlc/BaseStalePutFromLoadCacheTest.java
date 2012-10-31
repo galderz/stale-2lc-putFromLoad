@@ -109,7 +109,7 @@ public abstract class BaseStalePutFromLoadCacheTest {
       }
    }
 
-   public Class<Object>[] getAnnotatedClasses() {
+   public Class[] getAnnotatedClasses() {
       return new Class[] { Age.class };
    }
 
@@ -202,19 +202,28 @@ public abstract class BaseStalePutFromLoadCacheTest {
       Future<Void> loadFromDbFuture = exec.submit(new Callable<Void>() {
          @Override
          public Void call() throws Exception {
-            // 4. Load Item making sure it comes from database
+            // 4. Load entity making sure it comes from database
             log.debug("Load entity");
-            Session s = sf.openSession();
-            Age found = (Age) s.load(Age.class, age.getId());
-            assertEquals(age.getAge(), found.getAge());
-            assertEquals(1, stats.getMissCount());
-            // A miss happens but whether the put happens or not depends on
-            // whether the 2LC implementation allows stale data to be cached.
-            // So, commenting for the moment and a later check will verify it.
-            //
-            // assertEquals(0, stats.getPutCount());
-            assertEquals(0, stats.getHitCount());
-            s.close();
+            withTx(tm, new Callable<Object>() {
+               @Override
+               public Object call() throws Exception {
+                  Session s = sf.openSession();
+                  s.getTransaction().begin();
+                  Age found = (Age) s.load(Age.class, age.getId());
+                  assertEquals(age.getAge(), found.getAge());
+                  assertEquals(1, stats.getMissCount());
+                  // A miss happens but whether the put happens or not depends
+                  // on whether the 2LC implementation allows stale data to
+                  // be cached. So, commenting for the moment and a later
+                  // check will verify it.
+                  //
+                  // assertEquals(0, stats.getPutCount());
+                  assertEquals(0, stats.getHitCount());
+                  s.getTransaction().commit();
+                  s.close();
+                  return null;
+               }
+            });
             return null;
          }
       });
